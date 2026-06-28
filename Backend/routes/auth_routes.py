@@ -1,10 +1,12 @@
 from flask import Blueprint, request
 from services.auth_service import register_user, login_user
+from extensions import limiter
 
 auth_bp = Blueprint("auth", __name__)
 
 
 @auth_bp.route("/register", methods=["POST"])
+@limiter.limit("5 per minute")
 def register():
     data = request.get_json()
 
@@ -26,6 +28,7 @@ def register():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json()
 

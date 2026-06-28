@@ -6,6 +6,7 @@ from flask_migrate import Migrate
 
 from config import Config
 from database.db import db
+from extensions import limiter
 
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
@@ -44,6 +45,7 @@ jwt.init_app(app)
 # render_as_batch keeps ALTERs working on SQLite (dev); compare_type lets
 # autogenerate notice column type changes (e.g. Float -> Numeric).
 migrate.init_app(app, db, render_as_batch=True, compare_type=True)
+limiter.init_app(app)
 
 @app.route("/")
 def home():
