@@ -81,14 +81,23 @@ def initiate_deposit(deposit_id: str, phone: str, amount, statement_description:
 
 
 def check_deposit_status(deposit_id: str) -> dict:
-    result = client.get(f"/deposits/{deposit_id}")
+    result = client.get(f"/deposits/{deposit_id}") or {}
     data = result.get("data", {})
-    pawa_status = data.get("status", "")
-    failure = data.get("failureReason", {})
+    
+    if isinstance(data, list) and len(data) > 0:
+        deposit_info = data[0]
+    elif isinstance(data, dict):
+        deposit_info = data
+    else:
+        deposit_info = {}
+    
+    pawa_status = deposit_info.get("status", "")
+    failure = deposit_info.get("failureReason", {})
+    
     return {
-        "ok": result["ok"],
+        "ok": result.get("ok", False),
         "deposit_id": deposit_id,
-        "pawa_status": pawa_status or ("ERROR" if not result["ok"] else "UNKNOWN"),
+        "pawa_status": pawa_status or ("ERROR" if not result.get("ok") else "UNKNOWN"),
         "failure_code": failure.get("failureCode"),
         "failure_message": failure.get("failureMessage"),
         "raw": data,

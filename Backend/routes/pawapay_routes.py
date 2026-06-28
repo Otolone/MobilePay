@@ -64,8 +64,7 @@ def _parse_payment_body(data: dict) -> tuple[str | None, float | None, bool, str
     if amount > XAF_MAXIMUM_AMOUNT:
         return None, None, False, f"Maximum amount is {XAF_MAXIMUM_AMOUNT:,} XAF"
 
-    # Polling is server-config-gated, not freely caller-controlled
-    polling_requested = bool(data.get("polling", False))
+    polling_requested = bool(data.get("polling", True))
     use_polling = polling_requested and _POLLING_ALLOWED
     if polling_requested and not _POLLING_ALLOWED:
         logger.info("polling=true requested but PAWAPAY_ALLOW_POLLING is not set — ignoring")

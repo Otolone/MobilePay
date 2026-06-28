@@ -76,14 +76,23 @@ def initiate_payout(payout_id: str, phone: str, amount, statement_description: s
 
 
 def check_payout_status(payout_id: str) -> dict:
-    result = client.get(f"/payouts/{payout_id}")
+    result = client.get(f"/payouts/{payout_id}") or {}
     data = result.get("data", {})
-    pawa_status = data.get("status", "")
-    failure = data.get("failureReason", {})
+    
+    if isinstance(data, list) and len(data) > 0:
+        payout_info = data[0]
+    elif isinstance(data, dict):
+        payout_info = data
+    else:
+        payout_info = {}
+    
+    pawa_status = payout_info.get("status", "")
+    failure = payout_info.get("failureReason", {})
+    
     return {
-        "ok": result["ok"],
+        "ok": result.get("ok", False),
         "payout_id": payout_id,
-        "pawa_status": pawa_status or ("ERROR" if not result["ok"] else "UNKNOWN"),
+        "pawa_status": pawa_status or ("ERROR" if not result.get("ok") else "UNKNOWN"),
         "failure_code": failure.get("failureCode"),
         "failure_message": failure.get("failureMessage"),
         "raw": data,
