@@ -328,9 +328,15 @@ def verify_pawapay_signature(raw_body: bytes, signature_header: str | None) -> b
     (allows sandbox testing without configuring the secret).
     """
     secret = os.getenv("PAWAPAY_WEBHOOK_SECRET")
+    environment = os.getenv("PAWAPAY_ENVIRONMENT", "sandbox").lower()
 
     if not secret:
-        logger.warning("PAWAPAY_WEBHOOK_SECRET not set — skipping webhook signature verification. UNSAFE in production.")
+        # Fail closed in production: an unsigned-and-unverifiable webhook must
+        # never be allowed to move money. Only skip verification in sandbox.
+        if environment == "production":
+            logger.error("PAWAPAY_WEBHOOK_SECRET not set in production — rejecting webhook.")
+            return False
+        logger.warning("PAWAPAY_WEBHOOK_SECRET not set — skipping webhook signature verification (sandbox only).")
         return True
 
     if not signature_header:
