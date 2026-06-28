@@ -9,6 +9,8 @@ from services.wallet_service import (
 
 from models.wallet import Wallet
 
+from utils.money import to_decimal
+
 
 def process_mtn_webhook(
     reference_id,
@@ -44,9 +46,7 @@ def process_mtn_webhook(
             ).first()
 
             if wallet:
-                wallet.balance -= float(
-                    tx.amount
-                )
+                wallet.balance = to_decimal(wallet.balance) - to_decimal(tx.amount)
 
         db.session.commit()
 

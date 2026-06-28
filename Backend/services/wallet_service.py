@@ -2,6 +2,7 @@
 from database.db import db
 from models.wallet import Wallet
 from models.transaction import Transaction
+from utils.money import to_decimal, to_amount
 
 
 # -----------------------------
@@ -36,7 +37,7 @@ def create_wallet(user_id):
     return {
         "success": True,
         "message": "Wallet created",
-        "balance": wallet.balance
+        "balance": to_amount(wallet.balance)
     }, 201
 
 
@@ -55,7 +56,7 @@ def get_wallet(user_id):
 
     return {
         "success": True,
-        "balance": wallet.balance,
+        "balance": to_amount(wallet.balance),
         "currency": wallet.currency,
         "status": wallet.status
     }, 200
@@ -104,7 +105,7 @@ def credit_wallet_from_transaction(reference_id):
     if not wallet:
         return False
 
-    wallet.balance += float(tx.amount)
+    wallet.balance = to_decimal(wallet.balance) + to_decimal(tx.amount)
 
     tx.wallet_processed = True
 
@@ -135,13 +136,13 @@ def debit_wallet_from_transaction(reference_id):
     if not wallet:
         return False
 
-    amount = float(tx.amount)
+    amount = to_decimal(tx.amount)
 
     # Safety guard
-    if wallet.balance < amount:
+    if to_decimal(wallet.balance) < amount:
         return False
 
-    wallet.balance -= amount
+    wallet.balance = to_decimal(wallet.balance) - amount
 
     tx.wallet_processed = True
 
@@ -162,14 +163,14 @@ def deposit(user_id, amount):
     if not wallet:
         return {"success": False, "message": "Wallet not found"}, 404
 
-    wallet.balance += amount
+    wallet.balance = to_decimal(wallet.balance) + to_decimal(amount)
 
     db.session.commit()
 
     return {
         "success": True,
         "message": "Deposit successful",
-        "new_balance": wallet.balance
+        "new_balance": to_amount(wallet.balance)
     }, 200
 
 
@@ -186,17 +187,17 @@ def withdraw(user_id, amount):
     if not wallet:
         return {"success": False, "message": "Wallet not found"}, 404
 
-    if wallet.balance < amount:
+    if to_decimal(wallet.balance) < to_decimal(amount):
         return {"success": False, "message": "Insufficient balance"}, 400
 
-    wallet.balance -= amount
+    wallet.balance = to_decimal(wallet.balance) - to_decimal(amount)
 
     db.session.commit()
 
     return {
         "success": True,
         "message": "Withdrawal successful",
-        "new_balance": wallet.balance
+        "new_balance": to_amount(wallet.balance)
     }, 200
 
 

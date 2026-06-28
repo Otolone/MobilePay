@@ -18,9 +18,9 @@ class Wallet(db.Model):
     )
 
     balance = db.Column(
-        db.Float,
+        db.Numeric(15, 2),
         nullable=False,
-        default=0.0
+        default=0
     )
 
     currency = db.Column(

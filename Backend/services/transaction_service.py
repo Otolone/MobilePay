@@ -5,6 +5,7 @@ from database.db import db
 from models.transaction import Transaction
 from models.wallet import Wallet
 from models.kyc import KYC
+from utils.money import to_decimal, to_amount
 
 
 # -----------------------------
@@ -71,7 +72,7 @@ def deposit(user_id, amount):
     if not wallet:
         return {"success": False, "message": "Wallet not found"}, 404
 
-    wallet.balance += amount
+    wallet.balance = to_decimal(wallet.balance) + to_decimal(amount)
 
     tx = create_transaction(
         user_id=user_id,
@@ -86,7 +87,7 @@ def deposit(user_id, amount):
         "success": True,
         "message": "Deposit successful",
         "reference": tx.reference_id,
-        "balance": wallet.balance
+        "balance": to_amount(wallet.balance)
     }, 200
 
 
@@ -106,10 +107,10 @@ def withdraw(user_id, amount):
     if not wallet:
         return {"success": False, "message": "Wallet not found"}, 404
 
-    if wallet.balance < amount:
+    if to_decimal(wallet.balance) < to_decimal(amount):
         return {"success": False, "message": "Insufficient balance"}, 400
 
-    wallet.balance -= amount
+    wallet.balance = to_decimal(wallet.balance) - to_decimal(amount)
 
     tx = create_transaction(
         user_id=user_id,
@@ -124,7 +125,7 @@ def withdraw(user_id, amount):
         "success": True,
         "message": "Withdrawal successful",
         "reference": tx.reference_id,
-        "balance": wallet.balance
+        "balance": to_amount(wallet.balance)
     }, 200
 
 
@@ -145,12 +146,12 @@ def transfer(sender_id, receiver_id, amount):
     if not sender_wallet or not receiver_wallet:
         return {"success": False, "message": "Wallet not found"}, 404
 
-    if sender_wallet.balance < amount:
+    if to_decimal(sender_wallet.balance) < to_decimal(amount):
         return {"success": False, "message": "Insufficient balance"}, 400
 
     # atomic transfer
-    sender_wallet.balance -= amount
-    receiver_wallet.balance += amount
+    sender_wallet.balance = to_decimal(sender_wallet.balance) - to_decimal(amount)
+    receiver_wallet.balance = to_decimal(receiver_wallet.balance) + to_decimal(amount)
 
     tx = create_transaction(
         user_id=sender_id,
@@ -167,7 +168,7 @@ def transfer(sender_id, receiver_id, amount):
         "success": True,
         "message": "Transfer successful",
         "reference": tx.reference_id,
-        "sender_balance": sender_wallet.balance
+        "sender_balance": to_amount(sender_wallet.balance)
     }, 200
 
 

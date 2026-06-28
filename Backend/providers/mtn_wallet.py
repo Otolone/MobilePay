@@ -1,5 +1,6 @@
 from models.wallet import Wallet
 from database.db import db
+from utils.money import to_decimal, to_amount
 
 
 class MTNWalletProvider:
@@ -14,14 +15,14 @@ class MTNWalletProvider:
         if not wallet:
             return {"success": False, "message": "Wallet not found"}, 404
 
-        wallet.balance += amount
+        wallet.balance = to_decimal(wallet.balance) + to_decimal(amount)
         db.session.commit()
 
         return {
             "success": True,
             "provider": self.PROVIDER_NAME,
             "message": "MTN deposit successful",
-            "balance": wallet.balance
+            "balance": to_amount(wallet.balance)
         }, 200
 
     # Simulated withdrawal via MTN
@@ -32,15 +33,15 @@ class MTNWalletProvider:
         if not wallet:
             return {"success": False, "message": "Wallet not found"}, 404
 
-        if wallet.balance < amount:
+        if to_decimal(wallet.balance) < to_decimal(amount):
             return {"success": False, "message": "Insufficient balance"}, 400
 
-        wallet.balance -= amount
+        wallet.balance = to_decimal(wallet.balance) - to_decimal(amount)
         db.session.commit()
 
         return {
             "success": True,
             "provider": self.PROVIDER_NAME,
             "message": "MTN withdrawal successful",
-            "balance": wallet.balance
+            "balance": to_amount(wallet.balance)
         }, 200

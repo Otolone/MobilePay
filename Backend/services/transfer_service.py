@@ -4,6 +4,7 @@ from database.db import db
 from models.wallet import Wallet
 from models.transaction import Transaction
 from models.kyc import KYC
+from utils.money import to_decimal, to_amount
 
 def is_kyc_approved(user_id):
 
@@ -14,44 +15,81 @@ def is_kyc_approved(user_id):
 def generate_reference():
     return str(uuid.uuid4())
 
+def _lock_wallet(user_id):
+    """Read a wallet row with a FOR UPDATE row lock held until commit/rollback."""
+    return (
+        Wallet.query
+        .filter_by(user_id=user_id)
+        .with_for_update()
+        .first()
+    )
+
+
 def transfer(sender_id, receiver_id, amount, channel="INTERNAL"):
 
     if amount <= 0:
         return {"success": False, "message": "Invalid amount"}, 400
 
+    if sender_id == receiver_id:
+        return {"success": False, "message": "Cannot transfer to self"}, 400
+
     # KYC enforcement (important for compliance)
     if not is_kyc_approved(sender_id):
         return {"success": False, "message": "Sender KYC not approved"}, 403
 
-    sender_wallet = Wallet.query.filter_by(user_id=sender_id).first()
-    receiver_wallet = Wallet.query.filter_by(user_id=receiver_id).first()
+    amount = to_decimal(amount)
+    reference = generate_reference()
 
-    if not sender_wallet or not receiver_wallet:
-        return {"success": False, "message": "Wallet not found"}, 404
-
-    if sender_wallet.balance < amount:
-        return {"success": False, "message": "Insufficient balance"}, 400
-    
     try:
+        # Lock both wallet rows in a deterministic order (lowest user_id first)
+        # so concurrent A->B and B->A transfers can never deadlock.
+        first_id, second_id = sorted((sender_id, receiver_id))
+        _lock_wallet(first_id)
+        _lock_wallet(second_id)
+
+        # Re-fetch under the lock so the balance check sees committed state,
+        # not a value another transaction may have changed before we locked.
+        sender_wallet = Wallet.query.filter_by(user_id=sender_id).first()
+        receiver_wallet = Wallet.query.filter_by(user_id=receiver_id).first()
+
+        if not sender_wallet or not receiver_wallet:
+            db.session.rollback()
+            return {"success": False, "message": "Wallet not found"}, 404
+
+        if sender_wallet.status != "ACTIVE":
+            db.session.rollback()
+            return {"success": False, "message": "Sender wallet is not active"}, 403
+
+        if to_decimal(sender_wallet.balance) < amount:
+            db.session.rollback()
+            return {"success": False, "message": "Insufficient balance"}, 400
+
         # Debit sender
-        sender_wallet.balance -= amount
+        sender_wallet.balance = to_decimal(sender_wallet.balance) - amount
 
         # Credit receiver
-        receiver_wallet.balance += amount
+        receiver_wallet.balance = to_decimal(receiver_wallet.balance) + amount
 
         # Create ledger entry
         trx = Transaction(
-            sender_id=sender_id,
-            receiver_id=receiver_id,
+            reference_id=reference,
+            user_id=sender_id,
             amount=amount,
             type="TRANSFER",
             status="SUCCESS",
-            reference=generate_reference()
+            receiver_phone=str(receiver_id),
+            provider="INTERNAL",
+            sender_network=channel,
+            receiver_network=channel,
         )
 
         db.session.add(trx)
-        db.session.commit()
-        
+
+        sender_balance = to_amount(sender_wallet.balance)
+        receiver_balance = to_amount(receiver_wallet.balance)
+
+        db.session.commit()  # releases both FOR UPDATE locks
+
     except Exception as e:
         db.session.rollback()
         return {
@@ -63,8 +101,8 @@ def transfer(sender_id, receiver_id, amount, channel="INTERNAL"):
     return {
         "success": True,
         "message": "Transfer successful",
-        "reference": trx.reference,
-        "sender_balance": sender_wallet.balance,
-        "receiver_balance": receiver_wallet.balance,
+        "reference": reference,
+        "sender_balance": sender_balance,
+        "receiver_balance": receiver_balance,
         "channel": channel
     }, 200
